@@ -49,6 +49,7 @@ void GB(NSNumber **megabytes) {
 %hook SBXCloseBoxView
 %property (nonatomic, assign) UILabel *sizeLabel;
 
+// Yeah, layoutSubviews. I couldn't care less.
 -(void)layoutSubviews {
 	%orig;
 	self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, 40, self.frame.size.height);
