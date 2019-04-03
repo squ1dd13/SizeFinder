@@ -88,8 +88,10 @@ void GB(NSNumber **megabytes) {
 			NSString *string = stringSize;
 
 			something.hidden = YES;
-			//other stuff makes iOS 12 crash, this is stupid
-			if([[view subviews] count] == 4){
+                   bool exist;
+                   for(UIView *bleh in [view subviews]){ if([bleh isKindOfClass:[UILabel class]]){ exist = true; }
+}
+			if(!exist){
 				UILabel *sizeLabel = [[UILabel alloc] initWithFrame:selfView.bounds];
 				[sizeLabel setCenter:CGPointMake(selfView.frame.size.width / 2, selfView.frame.size.height / 2)];
 				sizeLabel.textAlignment = NSTextAlignmentCenter;
