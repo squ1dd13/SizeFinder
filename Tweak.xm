@@ -88,8 +88,8 @@ void GB(NSNumber **megabytes) {
 			NSString *string = stringSize;
 
 			something.hidden = YES;
-                   bool exist;
-                   for(UIView *bleh in [view subviews]){ if([bleh isKindOfClass:[UILabel class]]){ exist = true; }
+                   bool exist = false;
+                   for(UIView *bleh in [view subviews]){ if([bleh isMemberOfClass:[UILabel class]]){ exist = true; }
 }
 			if(!exist){
 				UILabel *sizeLabel = [[UILabel alloc] initWithFrame:selfView.bounds];
