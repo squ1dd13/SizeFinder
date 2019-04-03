@@ -62,16 +62,16 @@ void GB(NSNumber **megabytes) {
 			MB(&appDiskUsage); //convert to mb
 
 			//put it into a string with the unit so the user knows what they are looking at
-			NSString *stringSize = [NSString stringWithFormat:@"%.0fmb", round([appDiskUsage doubleValue])];
+			NSString *stringSize = [NSString stringWithFormat:@"%.0fMB", round([appDiskUsage doubleValue])];
 			//if the app is less than 0.5 megabytes it will be rounded down to 0, so we need to fix that by converting to kb
 			if([stringSize isEqualToString:@"0mb"]) {
 				MBtoKB(&appDiskUsage);
-				stringSize = [NSString stringWithFormat:@"%.0fkb", [appDiskUsage doubleValue]];
+				stringSize = [NSString stringWithFormat:@"%.0fKB", [appDiskUsage doubleValue]];
 			}
 
 			if([stringSize length] >= 6) {
 				GB(&appDiskUsage);
-				stringSize = [NSString stringWithFormat:@"%.2fgb", [appDiskUsage doubleValue]];
+				stringSize = [NSString stringWithFormat:@"%.2fGB", [appDiskUsage doubleValue]];
 			}
 
 			NSString *string = stringSize;
