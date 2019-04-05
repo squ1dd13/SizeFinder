@@ -1,6 +1,7 @@
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <AudioToolbox/AudioToolbox.h>
 
+Class CloseBoxClass;
 
 //pow(1*10, 6) == 1000000
 void MB(NSNumber **original) {
@@ -42,22 +43,32 @@ void GB(NSNumber **megabytes) {
 - (nullable NSArray<LSApplicationProxy *> *)allInstalledApplications;
 @end
 
-@interface SBXCloseBoxView : UIView
-@property (nonatomic, assign) UILabel *sizeLabel;
-@end
-
-%hook SBXCloseBoxView
-%property (nonatomic, assign) UILabel *sizeLabel;
+%hook CloseBoxView
 
 // Yeah, layoutSubviews. I couldn't care less.
 -(void)layoutSubviews {
 	%orig;
-	self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, 40, self.frame.size.height);
-	for(UIView *something in [self subviews]) {
+	UIView *view;
+	UIView *selfView;
+	selfView = self;
+	if([[[UIDevice currentDevice] systemVersion] floatValue] >= 12.0){
+		view = MSHookIvar<UIView *>(self, "_materialView");
+	}
+	else{
+		view = selfView;
+	}
+	if([[[UIDevice currentDevice] systemVersion] floatValue] < 11.0){
+		UIView *background = MSHookIvar<UIView *>(self, "_backgroundView");
+		background.frame = CGRectMake(background.frame.origin.x, background.frame.origin.y, 40, background.frame.size.height);
+		UIView *whiteBackground = MSHookIvar<UIView *>(self, "_whiteTintView");
+		whiteBackground.frame = CGRectMake(whiteBackground.frame.origin.x, whiteBackground.frame.origin.y, 40, whiteBackground.frame.size.height);
+	}
+	selfView.frame = CGRectMake(selfView.frame.origin.x, selfView.frame.origin.y, 40, selfView.frame.size.height);
+	for(UIView *something in [view subviews]) {
 		if([something respondsToSelector:@selector(image)]) {
 			//get the usage from the application bundle ID held by the application property in SBIcon
 			//the reason for the ternary if statement in the middle is because sometimes there is an extra UIView between the icon view and the label, which causes crashes
-			NSNumber *appDiskUsage = [[LSApplicationProxy applicationProxyForIdentifier:[[[([[self superview] respondsToSelector:@selector(icon)]) ? [self superview] : [[self superview] superview] icon] application] bundleIdentifier]] valueForKey:@"staticDiskUsage"];
+			NSNumber *appDiskUsage = [[LSApplicationProxy applicationProxyForIdentifier:[[[([[selfView superview] respondsToSelector:@selector(icon)]) ? [selfView superview] : [[selfView superview] superview] icon] application] bundleIdentifier]] valueForKey:@"staticDiskUsage"];
 
 			MB(&appDiskUsage); //convert to mb
 
@@ -77,23 +88,36 @@ void GB(NSNumber **megabytes) {
 			NSString *string = stringSize;
 
 			something.hidden = YES;
-			if(!self.sizeLabel) {
-				self.sizeLabel = [[UILabel alloc] initWithFrame:self.bounds];
-				[self.sizeLabel setCenter:CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2)];
-				self.sizeLabel.textAlignment = NSTextAlignmentCenter;
-				self.sizeLabel.adjustsFontSizeToFitWidth = YES;
-				self.sizeLabel.text = string;
-				[self.sizeLabel setFont:[UIFont systemFontOfSize:([string length] >= 5) ? 10 : 13]];
-				CGSize sizeOfString = [string sizeWithAttributes:@{ NSFontAttributeName : self.sizeLabel.font }];
+                   bool exist = false;
+                   for(UIView *bleh in [view subviews]){ if([bleh isMemberOfClass:[UILabel class]]){ exist = true; }
+}
+			if(!exist){
+				UILabel *sizeLabel = [[UILabel alloc] initWithFrame:selfView.bounds];
+				[sizeLabel setCenter:CGPointMake(selfView.frame.size.width / 2, selfView.frame.size.height / 2)];
+				sizeLabel.textAlignment = NSTextAlignmentCenter;
+				sizeLabel.adjustsFontSizeToFitWidth = YES;
+				sizeLabel.text = string;
+				[sizeLabel setFont:[UIFont systemFontOfSize:([string length] >= 5) ? 10 : 13]];
+				CGSize sizeOfString = [string sizeWithAttributes:@{ NSFontAttributeName : sizeLabel.font }];
 				NSLog(@"String width %f for string %@", sizeOfString.width, string);
 				if(sizeOfString.width >= 34) {
 					NSLog(@"Shrinking font to 12pt to improve appearance.");
-					self.sizeLabel.font = [UIFont systemFontOfSize:([string containsString:@"4"] && [string length] >= 5) ? 10 : 12];
+					sizeLabel.font = [UIFont systemFontOfSize:([string containsString:@"4"] && [string length] >= 5) ? 10 : 12];
 				}
-				[self addSubview:self.sizeLabel];
+				[view addSubview:sizeLabel];
 			}
 
 		}
 	}
 }
 %end
+
+%ctor{
+	if([[[UIDevice currentDevice] systemVersion] floatValue] < 11.0){
+		CloseBoxClass = objc_getClass("SBCloseBoxView");
+	}
+	else{
+		CloseBoxClass = objc_getClass("SBXCloseBoxView");
+	}
+	%init(_ungrouped, CloseBoxView = CloseBoxClass);
+}

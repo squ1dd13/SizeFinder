@@ -1,9 +1,9 @@
 Package: com.squ1dd13.sizefinder
 Name: SizeFinder
 Depends: mobilesubstrate
-Version: 0.0.1
+Version: 2.0
 Architecture: iphoneos-arm
-Description: A tweak to do … and …
-Maintainer: Squ1dd13
+Description: Add app size to delete button
+Maintainer: level3tjg
 Author: Squ1dd13
 Section: Tweaks
