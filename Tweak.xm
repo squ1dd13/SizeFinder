@@ -1,99 +1,127 @@
-#import <MobileCoreServices/MobileCoreServices.h>
-#import <AudioToolbox/AudioToolbox.h>
+#include <MobileCoreServices/MobileCoreServices.h>
 
-
-//pow(1*10, 6) == 1000000
-void MB(NSNumber **original) {
-	*original = @([*original doubleValue] / 1000000);
-}
-
-void MBtoKB(NSNumber **original) {
-	*original = @([*original doubleValue] * 1000);
-}
-
-void GB(NSNumber **megabytes) {
-	*megabytes = @([*megabytes doubleValue] / 1000);
-}
-
-@interface LSResourceProxy
-@property (nonatomic, copy, null_unspecified) NSString *localizedName;
+@interface CloseBox : UIView
+-(id)delegate;
 @end
 
-@interface LSBundleProxy : LSResourceProxy
-@property (nonatomic, readonly, null_unspecified) NSString *bundleIdentifier;
-@property (nonatomic, readonly, null_unspecified) NSString *localizedShortName;
-@property (nonatomic, readonly, null_unspecified) NSURL *bundleURL;
-@end
-
-@interface _LSDiskUsage : NSObject
-@property (nonatomic, readonly) NSNumber *dynamicUsage;
-@property (nonatomic, readonly) NSNumber *onDemandResourcesUsage;
-@property (nonatomic, readonly) NSNumber *sharedUsage;
-@property (nonatomic, readonly) NSNumber *staticUsage;
-@end
-
-@interface LSApplicationProxy : LSBundleProxy
+@interface LSApplicationProxy
 + (id)applicationProxyForIdentifier:(id)arg1;
 @property (nonatomic, readonly) NSNumber *staticDiskUsage;
+@property (nonatomic, readonly, null_unspecified) NSString *bundleIdentifier;
 @end
 
-@interface LSApplicationWorkspace : NSObject
-+ (nonnull instancetype)defaultWorkspace;
-- (nullable NSArray<LSApplicationProxy *> *)allInstalledApplications;
-@end
+static int iOSVersion;
 
-@interface SBXCloseBoxView : UIView
-@property (nonatomic, assign) UILabel *sizeLabel;
-@end
+typedef unsigned SizeUnit;
+#define B 1
+#define KB 1000
+#define MB 1000000
+#define GB 1000000000
 
-%hook SBXCloseBoxView
-%property (nonatomic, assign) UILabel *sizeLabel;
+unsigned convert(const unsigned value, const SizeUnit from, const SizeUnit to) {
+	const unsigned bytesValue = value * int(from);
+	return bytesValue / to;
+}
 
-// Yeah, layoutSubviews. I couldn't care less.
--(void)layoutSubviews {
-	%orig;
-	self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, 40, self.frame.size.height);
-	for(UIView *something in [self subviews]) {
-		if([something respondsToSelector:@selector(image)]) {
-			//get the usage from the application bundle ID held by the application property in SBIcon
-			//the reason for the ternary if statement in the middle is because sometimes there is an extra UIView between the icon view and the label, which causes crashes
-			NSNumber *appDiskUsage = [[LSApplicationProxy applicationProxyForIdentifier:[[[([[self superview] respondsToSelector:@selector(icon)]) ? [self superview] : [[self superview] superview] icon] application] bundleIdentifier]] valueForKey:@"staticDiskUsage"];
+unsigned autoConvert(unsigned value, const SizeUnit from, SizeUnit &to) {
+	//Convert to bytes so we needn't worry about the initial unit.
+	value = convert(value, from, B);
 
-			MB(&appDiskUsage); //convert to mb
+	if(value < KB) {
+		to = B;
+		return value;
+	}
 
-			//put it into a string with the unit so the user knows what they are looking at
-			NSString *stringSize = [NSString stringWithFormat:@"%.0fmb", round([appDiskUsage doubleValue])];
-			//if the app is less than 0.5 megabytes it will be rounded down to 0, so we need to fix that by converting to kb
-			if([stringSize isEqualToString:@"0mb"]) {
-				MBtoKB(&appDiskUsage);
-				stringSize = [NSString stringWithFormat:@"%.0fkb", [appDiskUsage doubleValue]];
-			}
+	if(KB <= value && value < MB) {
+		to = KB;
+		return convert(value, B, KB);
+	}
 
-			if([stringSize length] >= 6) {
-				GB(&appDiskUsage);
-				stringSize = [NSString stringWithFormat:@"%.2fgb", [appDiskUsage doubleValue]];
-			}
+	if(MB <= value && value < GB) {
+		to = MB;
+		return convert(value, B, MB);
+	}
 
-			NSString *string = stringSize;
+	to = GB;
+	return convert(value, B, GB);
+}
 
-			something.hidden = YES;
-			if(!self.sizeLabel) {
-				self.sizeLabel = [[UILabel alloc] initWithFrame:self.bounds];
-				[self.sizeLabel setCenter:CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2)];
-				self.sizeLabel.textAlignment = NSTextAlignmentCenter;
-				self.sizeLabel.adjustsFontSizeToFitWidth = YES;
-				self.sizeLabel.text = string;
-				[self.sizeLabel setFont:[UIFont systemFontOfSize:([string length] >= 5) ? 10 : 13]];
-				CGSize sizeOfString = [string sizeWithAttributes:@{ NSFontAttributeName : self.sizeLabel.font }];
-				NSLog(@"String width %f for string %@", sizeOfString.width, string);
-				if(sizeOfString.width >= 34) {
-					NSLog(@"Shrinking font to 12pt to improve appearance.");
-					self.sizeLabel.font = [UIFont systemFontOfSize:([string containsString:@"4"] && [string length] >= 5) ? 10 : 12];
-				}
-				[self addSubview:self.sizeLabel];
-			}
-
-		}
+NSString *getUnitString(const SizeUnit unit) {
+	switch(unit) {
+		case(B): return @"B";
+		case(KB): return @"KB";
+		case(MB): return @"MB";
+		case(GB): return @"GB";
+		default: return @"FU";
 	}
 }
+
+%hook CloseBox
+-(void)didMoveToSuperview {
+	%orig;
+#define self ((CloseBox *)self)
+	UIView *view = iOSVersion > 11 ? [self valueForKey:@"_materialView"] : self;
+	bool hasLabel = [[[view subviews] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"self isMemberOfClass: %@", [UILabel class]]] count] > 0;
+	if(hasLabel) {
+		//Don't bother going further.
+		return;
+	}
+
+	//10 and below have some random crap that we need to get rid of.
+	if(iOSVersion < 11){
+		UIView *background = [self valueForKey:@"_backgroundView"];
+		background.frame = CGRectMake(background.frame.origin.x, background.frame.origin.y, 40, background.frame.size.height);
+		UIView *whiteBackground = [self valueForKey:@"_whiteTintView"];
+		whiteBackground.frame = CGRectMake(whiteBackground.frame.origin.x, whiteBackground.frame.origin.y, 40, whiteBackground.frame.size.height);
+	}
+
+	self.frame = CGRectMake(self.frame.origin.x, self.frame.origin.y, 40, self.frame.size.height);
+
+	//Hide all subviews that are UIImageViews, because there are multiple 'X' images (just in case one of them breaks or sth ofc).
+	NSArray *imageViews = [[view subviews] filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id subview, NSDictionary *bindings) {
+		//KILL IT
+    	return [subview isMemberOfClass:[UIImageView class]];
+	}]];
+	
+	[imageViews makeObjectsPerformSelector:@selector(setAlpha:) withObject:@(0.0)];
+
+	//The close box's delegate is the icon view that leads us to the SBApplication which is stored here in 'application'.
+	id iconView = [self delegate];
+	id application = [[iconView performSelector:@selector(icon)] performSelector:@selector(application)];
+	//Get the bundle ID from the SBApplication and create an application proxy. The proxy gives us a bunch of info about the app.
+	NSString *bundleIdentifier = [application performSelector:@selector(bundleIdentifier)];
+	LSApplicationProxy *proxy = [LSApplicationProxy applicationProxyForIdentifier:bundleIdentifier];
+
+	//This SizeUnit (unsigned int) will store the unit that the automatic converter converted our byte value ([proxy staticDiskUsage]) to.
+	SizeUnit unit;
+	unsigned appDiskUsage = autoConvert([[proxy staticDiskUsage] intValue], B, unit);
+	NSString *string = [NSString stringWithFormat:@"%u%@", appDiskUsage, getUnitString(unit)];
+
+	UILabel *sizeLabel = [[UILabel alloc] initWithFrame:self.bounds];
+	[sizeLabel setCenter:CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2)];
+	sizeLabel.textAlignment = NSTextAlignmentCenter;
+	sizeLabel.adjustsFontSizeToFitWidth = YES;
+	sizeLabel.text = string;
+
+	//I can't really explain the sizing, because I wrote this nearly a year ago and forgot to comment this. I remember it took a long time though.
+	[sizeLabel setFont:[UIFont systemFontOfSize:([string length] >= 5) ? 10 : 13]];
+	CGSize sizeOfString = [string sizeWithAttributes:@{ NSFontAttributeName : sizeLabel.font }];
+	if(sizeOfString.width > 33) {
+		//Width over 33? We can't have that.
+		sizeLabel.font = [UIFont systemFontOfSize:([string containsString:@"4"] && [string length] > 4) ? 10 : 12];
+	}
+
+	[view addSubview:sizeLabel];
+#undef self
+}
 %end
+
+%ctor {
+	//Having the integer value is useful, as comparing the float value of [[UIDevice currentDevice] systemVersion] to another float is very unreliable.
+	//For starters, x.y.z is not a valid float, and besides - float comparison is unreliable.
+	iOSVersion = [[[[UIDevice currentDevice] systemVersion] componentsSeparatedByString:@"."][0] intValue];
+
+	Class boxClass = objc_getClass(iOSVersion < 11 ? "SBCloseBoxView" : "SBXCloseBoxView");
+	%init(CloseBox = boxClass);
+}
+
