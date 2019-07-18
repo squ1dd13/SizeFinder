@@ -5,7 +5,7 @@
 @end
 
 @interface LSApplicationProxy
-+ (id)applicationProxyForIdentifier:(id)arg1;
++(id)applicationProxyForIdentifier:(id)arg1;
 @property (nonatomic, readonly) NSNumber *staticDiskUsage;
 @property (nonatomic, readonly, null_unspecified) NSString *bundleIdentifier;
 @end
@@ -57,6 +57,7 @@ NSString *getUnitString(const SizeUnit unit) {
 }
 
 %hook CloseBox
+
 -(void)didMoveToSuperview {
 	%orig;
 #define self ((CloseBox *)self)
@@ -104,16 +105,18 @@ NSString *getUnitString(const SizeUnit unit) {
 	sizeLabel.text = string;
 
 	//I can't really explain the sizing, because I wrote this nearly a year ago and forgot to comment this. I remember it took a long time though.
-	[sizeLabel setFont:[UIFont systemFontOfSize:([string length] >= 5) ? 10 : 13]];
+	[sizeLabel setFont:[UIFont systemFontOfSize:([string length] >= 5) ? 9 : 12]];
 	CGSize sizeOfString = [string sizeWithAttributes:@{ NSFontAttributeName : sizeLabel.font }];
 	if(sizeOfString.width > 33) {
 		//Width over 33? We can't have that.
-		sizeLabel.font = [UIFont systemFontOfSize:([string containsString:@"4"] && [string length] > 4) ? 10 : 12];
+		const int fontSize = ([string containsString:@"4"] && [string length] > 4) ? 9 : 11;
+		sizeLabel.font = [UIFont systemFontOfSize:fontSize];
 	}
 
 	[view addSubview:sizeLabel];
 #undef self
 }
+
 %end
 
 %ctor {
